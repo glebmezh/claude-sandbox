@@ -55,14 +55,10 @@ fi
 
 # ── launch ───────────────────────────────────────────────────────────────────
 
-# Container name is based on the current directory for easy identification
-CONTAINER_NAME="claude-sandbox-$(basename "$(pwd)" | tr -cd '[:alnum:]-_' | head -c 30)"
-
 exec docker run \
     --rm \
     --interactive \
     --tty \
-    --name "${CONTAINER_NAME}" \
     --user "$(id -u):$(id -g)" \
     --env HOME="$HOME" \
     --volume "$(pwd):/workspace" \
