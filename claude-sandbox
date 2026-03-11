@@ -14,20 +14,23 @@ build_image() {
     docker build --pull -t "${FULL_IMAGE}" - <<'DOCKERFILE'
 FROM node:lts-slim
 
-# System deps needed by the Claude Code native installer
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl ca-certificates git \
+        curl ca-certificates git bash python3 python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install latest Claude Code via the official npm package
-RUN npm install -g @anthropic-ai/claude-code@latest
+# Install uv (fast Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+
+# Install Claude Code using the official native installer
+RUN curl -fsSL https://claude.ai/install.sh | bash && \
+    cp /root/.local/bin/claude /usr/local/bin/claude
 
 RUN mkdir -p /workspace && chmod 777 /workspace
 
-# Entrypoint: copy read-only host config to a writable tmpfs home, then run claude
+# Entrypoint: copy read-only host config to a writable home, then run claude
 RUN cat > /entrypoint.sh << 'EOF'
-#!/bin/sh
-# Set up a writable home dir in /tmp so Claude can write runtime state
+#!/bin/bash
+# Set up a writable home in /tmp so Claude can write runtime state
 # without touching the host config mounts (which are read-only).
 WRITABLE_HOME="/tmp/claude-home"
 mkdir -p "$WRITABLE_HOME"
