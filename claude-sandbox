@@ -83,6 +83,7 @@ exec docker run \
     --env HOME="$HOME" \
     --publish 3118:3118 \
     --publish 10000:10000 \
+    --publish 4321-4330:4321-4330 \
     --volume "$(pwd):/workspace" \
     --volume "$HOME/.claude:$HOME/.claude:ro" \
     --volume "$HOME/.claude.json:$HOME/.claude.json:ro" \
