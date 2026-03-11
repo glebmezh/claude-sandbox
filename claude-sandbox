@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# claude-sandbox — run Claude Code in a Docker container sandboxed to CWD
+# Usage: claude-sandbox [--rebuild] [claude args...]
+set -euo pipefail
+
+IMAGE_NAME="claude-code-sandbox"
+IMAGE_TAG="latest"
+FULL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+build_image() {
+    echo "[claude-sandbox] Building Docker image (this takes ~1 min the first time)..."
+    docker build --pull -t "${FULL_IMAGE}" - <<'DOCKERFILE'
+FROM node:lts-slim
+
+# System deps needed by the Claude Code native installer
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl ca-certificates git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install latest Claude Code via the official npm package
+RUN npm install -g @anthropic-ai/claude-code@latest
+
+WORKDIR /workspace
+
+ENTRYPOINT ["claude"]
+DOCKERFILE
+    echo "[claude-sandbox] Image built successfully."
+}
+
+# ── argument parsing ─────────────────────────────────────────────────────────
+
+REBUILD=false
+PASS_ARGS=()
+
+for arg in "$@"; do
+    case "$arg" in
+        --rebuild|-r)
+            REBUILD=true
+            ;;
+        *)
+            PASS_ARGS+=("$arg")
+            ;;
+    esac
+done
+
+# ── ensure image exists ──────────────────────────────────────────────────────
+
+if $REBUILD || ! docker image inspect "${FULL_IMAGE}" &>/dev/null; then
+    build_image
+fi
+
+# ── API key check ────────────────────────────────────────────────────────────
+
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+    echo "[claude-sandbox] Warning: ANTHROPIC_API_KEY is not set. Claude may prompt for auth." >&2
+fi
+
+# ── launch ───────────────────────────────────────────────────────────────────
+
+# Container name is based on the current directory for easy identification
+CONTAINER_NAME="claude-sandbox-$(basename "$(pwd)" | tr -cd '[:alnum:]-_' | head -c 30)"
+
+exec docker run \
+    --rm \
+    --interactive \
+    --tty \
+    --name "${CONTAINER_NAME}" \
+    --volume "$(pwd):/workspace" \
+    --workdir /workspace \
+    ${ANTHROPIC_API_KEY:+--env ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"} \
+    ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
+    "${FULL_IMAGE}" \
+    --dangerously-skip-permissions \
+    "${PASS_ARGS[@]+"${PASS_ARGS[@]}"}"
