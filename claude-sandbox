@@ -22,10 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install latest Claude Code via the official npm package
 RUN npm install -g @anthropic-ai/claude-code@latest
 
-# Create a home dir that any runtime UID can use (UID is injected via --user at runtime)
-RUN mkdir -p /home/user /workspace && chmod 777 /home/user /workspace
+RUN mkdir -p /workspace && chmod 777 /workspace
 
-ENV HOME=/home/user
 WORKDIR /workspace
 
 ENTRYPOINT ["claude"]
@@ -66,8 +64,10 @@ exec docker run \
     --tty \
     --name "${CONTAINER_NAME}" \
     --user "$(id -u):$(id -g)" \
+    --env HOME="$HOME" \
     --volume "$(pwd):/workspace" \
-    --volume "$HOME/.claude:/home/user/.claude" \
+    --volume "$HOME/.claude:$HOME/.claude" \
+    --volume "$HOME/.claude.json:$HOME/.claude.json" \
     --workdir /workspace \
     ${ANTHROPIC_API_KEY:+--env ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"} \
     ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
