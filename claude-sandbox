@@ -24,9 +24,29 @@ RUN npm install -g @anthropic-ai/claude-code@latest
 
 RUN mkdir -p /workspace && chmod 777 /workspace
 
+# Entrypoint: copy read-only host config to a writable tmpfs home, then run claude
+RUN cat > /entrypoint.sh << 'EOF'
+#!/bin/sh
+# Set up a writable home dir in /tmp so Claude can write runtime state
+# without touching the host config mounts (which are read-only).
+WRITABLE_HOME="/tmp/claude-home"
+mkdir -p "$WRITABLE_HOME"
+
+if [ -d "$HOME/.claude" ]; then
+    cp -r "$HOME/.claude" "$WRITABLE_HOME/.claude"
+fi
+if [ -f "$HOME/.claude.json" ]; then
+    cp "$HOME/.claude.json" "$WRITABLE_HOME/.claude.json"
+fi
+
+export HOME="$WRITABLE_HOME"
+exec claude "$@"
+EOF
+RUN chmod +x /entrypoint.sh
+
 WORKDIR /workspace
 
-ENTRYPOINT ["claude"]
+ENTRYPOINT ["/entrypoint.sh"]
 DOCKERFILE
     echo "[claude-sandbox] Image built successfully."
 }
