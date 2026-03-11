@@ -68,7 +68,7 @@ exec docker run \
     --tty \
     --name "${CONTAINER_NAME}" \
     --volume "$(pwd):/workspace" \
-    --volume "$HOME/.claude:/home/claude/.claude" \
+    --volume "$(pwd)/.claude:/home/claude/.claude" \
     --workdir /workspace \
     ${ANTHROPIC_API_KEY:+--env ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"} \
     ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
