@@ -30,29 +30,9 @@ RUN curl -fsSL https://claude.ai/install.sh | bash && \
 
 RUN mkdir -p /workspace && chmod 777 /workspace
 
-# Entrypoint: copy read-only host config to a writable home, then run claude
-RUN cat > /entrypoint.sh << 'EOF'
-#!/bin/bash
-# Set up a writable home in /tmp so Claude can write runtime state
-# without touching the host config mounts (which are read-only).
-WRITABLE_HOME="/tmp/claude-home"
-mkdir -p "$WRITABLE_HOME"
-
-if [ -d "$HOME/.claude" ]; then
-    cp -r "$HOME/.claude" "$WRITABLE_HOME/.claude"
-fi
-if [ -f "$HOME/.claude.json" ]; then
-    cp "$HOME/.claude.json" "$WRITABLE_HOME/.claude.json"
-fi
-
-export HOME="$WRITABLE_HOME"
-exec claude "$@"
-EOF
-RUN chmod +x /entrypoint.sh
-
 WORKDIR /workspace
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["claude"]
 DOCKERFILE
     echo "[claude-sandbox] Image built successfully."
 }
@@ -91,8 +71,8 @@ exec docker run \
     --publish 10000:10000 \
     --publish 4321-4330:4321-4330 \
     --volume "$(pwd):/workspace" \
-    --volume "$HOME/.claude:$HOME/.claude:ro" \
-    --volume "$HOME/.claude.json:$HOME/.claude.json:ro" \
+    --volume "$HOME/.claude:$HOME/.claude" \
+    --volume "$HOME/.claude.json:$HOME/.claude.json" \
     --workdir /workspace \
     ${ANTHROPIC_API_KEY:+--env ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"} \
     ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
