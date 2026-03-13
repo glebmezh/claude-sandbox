@@ -43,7 +43,7 @@ RUN cat > /entrypoint.sh << 'EOF'
 # ~/.claude is mounted at /host-claude-dir (not under $HOME) so Docker
 # never auto-creates $HOME as root. We create it ourselves as the runtime
 # user, then symlink .claude into place and copy .claude.json locally.
-mkdir -p "$HOME"
+mkdir -p "$HOME/.local/bin"
 ln -sf /host-claude-dir "$HOME/.claude"
 if [ -f /tmp/host-claude.json ]; then
     cp /tmp/host-claude.json "$HOME/.claude.json"
