@@ -24,12 +24,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv (fast Python package manager)
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
-# Install Playwright CLI and Chromium with all system deps.
-# Store browsers in /usr/local/ms-playwright so all users can access them.
+# Install Playwright and Chromium with all system deps.
+# - Use the full 'playwright' package (not @playwright/cli which hardcodes /opt/google/chrome)
+# - Store browsers in /usr/local/ms-playwright, world-writable so the runtime
+#   user can install additional browsers if needed.
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr/local/ms-playwright
-RUN npm install -g @playwright/cli@latest && \
-    npx playwright install --with-deps chromium chrome && \
-    chmod -R 755 /usr/local/ms-playwright
+RUN npm install -g playwright && \
+    npx playwright install --with-deps chromium && \
+    chmod -R 777 /usr/local/ms-playwright
 
 # Install Claude Code using the official native installer
 RUN curl -fsSL https://claude.ai/install.sh | bash && \
