@@ -24,6 +24,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv (fast Python package manager)
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
+# Install Playwright CLI and Chromium with all system deps
+RUN npm install -g @playwright/cli@latest && \
+    npx playwright install --with-deps chromium
+
 # Install Claude Code using the official native installer
 RUN curl -fsSL https://claude.ai/install.sh | bash && \
     cp /root/.local/bin/claude /usr/local/bin/claude
