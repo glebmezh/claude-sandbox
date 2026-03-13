@@ -28,7 +28,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/b
 # Store browsers in /usr/local/ms-playwright so all users can access them.
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr/local/ms-playwright
 RUN npm install -g @playwright/cli@latest && \
-    npx playwright install --with-deps chromium && \
+    npx playwright install --with-deps chromium chrome && \
     chmod -R 755 /usr/local/ms-playwright
 
 # Install Claude Code using the official native installer
