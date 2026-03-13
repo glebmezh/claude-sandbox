@@ -62,12 +62,16 @@ DOCKERFILE
 # ── argument parsing ─────────────────────────────────────────────────────────
 
 REBUILD=false
+SHELL_MODE=false
 PASS_ARGS=()
 
 for arg in "$@"; do
     case "$arg" in
         --rebuild|-r)
             REBUILD=true
+            ;;
+        --shell|-s)
+            SHELL_MODE=true
             ;;
         *)
             PASS_ARGS+=("$arg")
@@ -187,6 +191,7 @@ exec docker run \
     --volume "$CLAUDE_JSON_FILE:/tmp/host-claude.json:ro" \
     --workdir /workspace \
     ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
+    $($SHELL_MODE && echo "--entrypoint bash") \
     "${FULL_IMAGE}" \
-    --dangerously-skip-permissions \
+    $($SHELL_MODE || echo "--dangerously-skip-permissions") \
     "${PASS_ARGS[@]+"${PASS_ARGS[@]}"}"
