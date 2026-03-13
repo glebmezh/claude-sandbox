@@ -63,13 +63,39 @@ if $REBUILD || ! docker image inspect "${FULL_IMAGE}" &>/dev/null; then
     build_image
 fi
 
-# ── cleanup any lingering sandbox containers ─────────────────────────────────
+# ── port allocation ──────────────────────────────────────────────────────────
 
-RUNNING=$(docker ps -q --filter "ancestor=${FULL_IMAGE}" 2>/dev/null)
-if [[ -n "$RUNNING" ]]; then
-    echo "[claude-sandbox] Stopping previous sandbox container..."
-    docker kill $RUNNING >/dev/null 2>&1 || true
-fi
+free_port() {
+    local port=$1
+    while lsof -i ":${port}" -sTCP:LISTEN -t >/dev/null 2>&1; do
+        ((port++))
+    done
+    echo "$port"
+}
+
+free_range() {
+    # Find a block of 'count' consecutive free ports starting from 'start'
+    local start=$1 count=$2
+    while true; do
+        local all_free=true
+        for ((i=0; i<count; i++)); do
+            if lsof -i ":$((start+i))" -sTCP:LISTEN -t >/dev/null 2>&1; then
+                start=$((start+i+1)); all_free=false; break
+            fi
+        done
+        $all_free && break
+    done
+    echo "$start"
+}
+
+PORT_SLACK=$(free_port 3118)
+PORT_LOGIN=$(free_port 10000)
+DEV_START=$(free_range 4321 10)
+DEV_END=$((DEV_START + 9))
+
+[[ "$PORT_SLACK"  != "3118"  ]] && echo "[claude-sandbox] Slack OAuth port:  localhost:${PORT_SLACK} → container:3118"
+[[ "$PORT_LOGIN"  != "10000" ]] && echo "[claude-sandbox] Login callback port: localhost:${PORT_LOGIN} → container:10000"
+[[ "$DEV_START"   != "4321"  ]] && echo "[claude-sandbox] Dev server ports:   localhost:${DEV_START}-${DEV_END} → container:4321-4330"
 
 # ── credentials ──────────────────────────────────────────────────────────────
 
@@ -100,9 +126,9 @@ exec docker run \
     --tty \
     --user "$(id -u):$(id -g)" \
     --env HOME="$HOME" \
-    --publish 3118:3118 \
-    --publish 10000:10000 \
-    --publish 4321-4330:4321-4330 \
+    --publish "${PORT_SLACK}:3118" \
+    --publish "${PORT_LOGIN}:10000" \
+    --publish "${DEV_START}-${DEV_END}:4321-4330" \
     --volume "$(pwd):/workspace" \
     --volume "$HOME/.claude:$HOME/.claude" \
     --volume "$HOME/.claude.json:$HOME/.claude.json" \
