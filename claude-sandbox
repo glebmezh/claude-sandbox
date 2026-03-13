@@ -181,6 +181,7 @@ exec docker run \
     --volume "$(pwd):/workspace" \
     --volume "$(pwd)/.claude:/host-claude-dir" \
     --volume "$HOME/.claude/plugins:/host-claude-dir/plugins:ro" \
+    --volume "$HOME/.claude/skills:/host-claude-dir/skills:ro" \
     --volume "$GLOBAL_HISTORY_DIR:/host-claude-dir/projects/$PROJECT_KEY" \
     --volume "$CREDS_FILE:/host-claude-dir/.credentials.json" \
     --volume "$CLAUDE_JSON_FILE:/tmp/host-claude.json:ro" \
