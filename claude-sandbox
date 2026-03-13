@@ -115,19 +115,23 @@ DEV_END=$((DEV_START + 9))
 [[ "$PORT_LOGIN"  != "10000" ]] && echo "[claude-sandbox] Login callback port: localhost:${PORT_LOGIN} → container:10000"
 [[ "$DEV_START"   != "4321"  ]] && echo "[claude-sandbox] Dev server ports:   localhost:${DEV_START}-${DEV_END} → container:4321-4330"
 
-# ── credentials ──────────────────────────────────────────────────────────────
+# ── credentials & config ─────────────────────────────────────────────────────
 
-# Merge the claudeAiOauth token from the macOS Keychain into a temp credentials
-# file so the container can authenticate without Keychain access.
-CREDS_FILE=$(mktemp -t claude-sandbox-credentials)
-KEYCHAIN_FILE=$(mktemp -t claude-sandbox-keychain)
-trap 'rm -f "$CREDS_FILE" "$KEYCHAIN_FILE"' EXIT
+# Temp dir for all ephemeral files; cleaned up on exit.
+SANDBOX_DIR=$(mktemp -d -t claude-sandbox)
+trap 'rm -rf "$SANDBOX_DIR"' EXIT
 
+# Create project .claude dir if it doesn't exist
+mkdir -p "$(pwd)/.claude"
+
+# Build merged credentials: claudeAiOauth (Keychain) + mcpOAuth (project file if any)
+KEYCHAIN_FILE="$SANDBOX_DIR/keychain.json"
+CREDS_FILE="$SANDBOX_DIR/credentials.json"
 security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null > "$KEYCHAIN_FILE" || echo '{}' > "$KEYCHAIN_FILE"
 
-python3 - "$KEYCHAIN_FILE" "$HOME/.claude/.credentials.json" "$CREDS_FILE" <<'PYEOF'
+python3 - "$KEYCHAIN_FILE" "$(pwd)/.claude/.credentials.json" "$CREDS_FILE" <<'PYEOF'
 import json, sys
-keychain  = json.load(open(sys.argv[1])) if open(sys.argv[1]).read().strip() != '{}' else {}
+keychain = json.load(open(sys.argv[1]))
 try:
     existing = json.load(open(sys.argv[2]))
 except Exception:
@@ -136,7 +140,25 @@ merged = {**existing, **{k: v for k, v in keychain.items() if k == 'claudeAiOaut
 json.dump(merged, open(sys.argv[3], 'w'))
 PYEOF
 
+# Synthesize ~/.claude.json with HTTP mcpServers only (stdio servers reference
+# host paths that don't exist in the container — silently drop them).
+CLAUDE_JSON_FILE="$SANDBOX_DIR/.claude.json"
+python3 - "$HOME/.claude.json" "$CLAUDE_JSON_FILE" <<'PYEOF'
+import json, sys
+try:
+    src = json.load(open(sys.argv[1]))
+except Exception:
+    src = {}
+http_servers = {k: v for k, v in src.get('mcpServers', {}).items()
+                if v.get('type') == 'http'}
+out = {k: v for k, v in src.items() if k not in ('mcpServers', 'projects', 'githubRepoPaths')}
+out['mcpServers'] = http_servers
+json.dump(out, open(sys.argv[2], 'w'))
+PYEOF
+
 # ── launch ───────────────────────────────────────────────────────────────────
+
+echo "[claude-sandbox] Dev server → http://localhost:${DEV_START} on your Mac"
 
 exec docker run \
     --rm \
@@ -144,13 +166,16 @@ exec docker run \
     --tty \
     --user "$(id -u):$(id -g)" \
     --env HOME="$HOME" \
-    --publish "${PORT_SLACK}:3118" \
-    --publish "${PORT_LOGIN}:10000" \
-    --publish "${DEV_START}-${DEV_END}:4321-4330" \
+    --env HOST=0.0.0.0 \
+    --env SANDBOX_DEV_PORT="${DEV_START}" \
+    --publish "127.0.0.1:${PORT_SLACK}:3118" \
+    --publish "127.0.0.1:${PORT_LOGIN}:10000" \
+    --publish "127.0.0.1:${DEV_START}-${DEV_END}:4321-4330" \
     --volume "$(pwd):/workspace" \
-    --volume "$HOME/.claude:/host-claude-dir" \
-    --volume "$HOME/.claude.json:/tmp/host-claude.json:ro" \
-    --volume "${CREDS_FILE}:/host-claude-dir/.credentials.json" \
+    --volume "$(pwd)/.claude:/host-claude-dir" \
+    --volume "$HOME/.claude/plugins/cache:/host-claude-dir/plugins/cache:ro" \
+    --volume "$CREDS_FILE:/host-claude-dir/.credentials.json" \
+    --volume "$CLAUDE_JSON_FILE:/tmp/host-claude.json:ro" \
     --workdir /workspace \
     ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
     "${FULL_IMAGE}" \
