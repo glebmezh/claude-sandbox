@@ -34,9 +34,21 @@ RUN curl -fsSL https://claude.ai/install.sh | bash && \
 
 RUN mkdir -p /workspace && chmod 777 /workspace
 
+# Entrypoint: make ~/.claude.json writable (container-local copy) so the
+# host file is never modified, while ~/.claude/ stays a live host mount.
+RUN cat > /entrypoint.sh << 'EOF'
+#!/bin/bash
+mkdir -p "$HOME"
+if [ -f /tmp/host-claude.json ]; then
+    cp /tmp/host-claude.json "$HOME/.claude.json"
+fi
+exec claude "$@"
+EOF
+RUN chmod +x /entrypoint.sh
+
 WORKDIR /workspace
 
-ENTRYPOINT ["claude"]
+ENTRYPOINT ["/entrypoint.sh"]
 DOCKERFILE
     echo "[claude-sandbox] Image built successfully."
 }
@@ -131,7 +143,7 @@ exec docker run \
     --publish "${DEV_START}-${DEV_END}:4321-4330" \
     --volume "$(pwd):/workspace" \
     --volume "$HOME/.claude:$HOME/.claude" \
-    --volume "$HOME/.claude.json:$HOME/.claude.json" \
+    --volume "$HOME/.claude.json:/tmp/host-claude.json:ro" \
     --volume "${CREDS_FILE}:$HOME/.claude/.credentials.json" \
     --workdir /workspace \
     ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
