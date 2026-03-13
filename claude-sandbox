@@ -59,6 +59,27 @@ if $REBUILD || ! docker image inspect "${FULL_IMAGE}" &>/dev/null; then
     build_image
 fi
 
+# ── credentials ──────────────────────────────────────────────────────────────
+
+# Merge the claudeAiOauth token from the macOS Keychain into a temp credentials
+# file so the container can authenticate without Keychain access.
+CREDS_FILE=$(mktemp /tmp/claude-sandbox-credentials.XXXXXX.json)
+KEYCHAIN_FILE=$(mktemp /tmp/claude-sandbox-keychain.XXXXXX.json)
+trap 'rm -f "$CREDS_FILE" "$KEYCHAIN_FILE"' EXIT
+
+security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null > "$KEYCHAIN_FILE" || echo '{}' > "$KEYCHAIN_FILE"
+
+python3 - "$KEYCHAIN_FILE" "$HOME/.claude/.credentials.json" "$CREDS_FILE" <<'PYEOF'
+import json, sys
+keychain  = json.load(open(sys.argv[1])) if open(sys.argv[1]).read().strip() != '{}' else {}
+try:
+    existing = json.load(open(sys.argv[2]))
+except Exception:
+    existing = {}
+merged = {**existing, **{k: v for k, v in keychain.items() if k == 'claudeAiOauth'}}
+json.dump(merged, open(sys.argv[3], 'w'))
+PYEOF
+
 # ── launch ───────────────────────────────────────────────────────────────────
 
 exec docker run \
@@ -73,8 +94,8 @@ exec docker run \
     --volume "$(pwd):/workspace" \
     --volume "$HOME/.claude:$HOME/.claude" \
     --volume "$HOME/.claude.json:$HOME/.claude.json" \
+    --volume "${CREDS_FILE}:$HOME/.claude/.credentials.json" \
     --workdir /workspace \
-    ${ANTHROPIC_API_KEY:+--env ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"} \
     ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
     "${FULL_IMAGE}" \
     --dangerously-skip-permissions \
