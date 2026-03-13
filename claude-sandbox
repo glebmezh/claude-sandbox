@@ -40,7 +40,11 @@ RUN mkdir -p /Users /home /workspace && chmod 777 /Users /home /workspace
 # host file is never modified, while ~/.claude/ stays a live host mount.
 RUN cat > /entrypoint.sh << 'EOF'
 #!/bin/bash
+# ~/.claude is mounted at /host-claude-dir (not under $HOME) so Docker
+# never auto-creates $HOME as root. We create it ourselves as the runtime
+# user, then symlink .claude into place and copy .claude.json locally.
 mkdir -p "$HOME"
+ln -sf /host-claude-dir "$HOME/.claude"
 if [ -f /tmp/host-claude.json ]; then
     cp /tmp/host-claude.json "$HOME/.claude.json"
 fi
@@ -144,9 +148,9 @@ exec docker run \
     --publish "${PORT_LOGIN}:10000" \
     --publish "${DEV_START}-${DEV_END}:4321-4330" \
     --volume "$(pwd):/workspace" \
-    --volume "$HOME/.claude:$HOME/.claude" \
+    --volume "$HOME/.claude:/host-claude-dir" \
     --volume "$HOME/.claude.json:/tmp/host-claude.json:ro" \
-    --volume "${CREDS_FILE}:$HOME/.claude/.credentials.json" \
+    --volume "${CREDS_FILE}:/host-claude-dir/.credentials.json" \
     --workdir /workspace \
     ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
     "${FULL_IMAGE}" \
