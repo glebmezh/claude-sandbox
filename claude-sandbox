@@ -32,7 +32,9 @@ RUN npm install -g @playwright/cli@latest && \
 RUN curl -fsSL https://claude.ai/install.sh | bash && \
     cp /root/.local/bin/claude /usr/local/bin/claude
 
-RUN mkdir -p /workspace && chmod 777 /workspace
+# Pre-create home directory parents so the runtime user (non-root) can write there.
+# /Users for macOS hosts, /home for Linux hosts.
+RUN mkdir -p /Users /home /workspace && chmod 777 /Users /home /workspace
 
 # Entrypoint: make ~/.claude.json writable (container-local copy) so the
 # host file is never modified, while ~/.claude/ stays a live host mount.
