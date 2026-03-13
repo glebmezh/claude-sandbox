@@ -67,8 +67,8 @@ fi
 
 # Merge the claudeAiOauth token from the macOS Keychain into a temp credentials
 # file so the container can authenticate without Keychain access.
-CREDS_FILE=$(mktemp /tmp/claude-sandbox-credentials.XXXXXX.json)
-KEYCHAIN_FILE=$(mktemp /tmp/claude-sandbox-keychain.XXXXXX.json)
+CREDS_FILE=$(mktemp -t claude-sandbox-credentials)
+KEYCHAIN_FILE=$(mktemp -t claude-sandbox-keychain)
 trap 'rm -f "$CREDS_FILE" "$KEYCHAIN_FILE"' EXIT
 
 security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null > "$KEYCHAIN_FILE" || echo '{}' > "$KEYCHAIN_FILE"
