@@ -63,6 +63,14 @@ if $REBUILD || ! docker image inspect "${FULL_IMAGE}" &>/dev/null; then
     build_image
 fi
 
+# ── cleanup any lingering sandbox containers ─────────────────────────────────
+
+RUNNING=$(docker ps -q --filter "ancestor=${FULL_IMAGE}" 2>/dev/null)
+if [[ -n "$RUNNING" ]]; then
+    echo "[claude-sandbox] Stopping previous sandbox container..."
+    docker kill $RUNNING >/dev/null 2>&1 || true
+fi
+
 # ── credentials ──────────────────────────────────────────────────────────────
 
 # Merge the claudeAiOauth token from the macOS Keychain into a temp credentials
