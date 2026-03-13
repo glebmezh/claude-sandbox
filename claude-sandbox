@@ -24,9 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv (fast Python package manager)
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
-# Install Playwright CLI and Chromium with all system deps
+# Install Playwright CLI and Chromium with all system deps.
+# Store browsers in /usr/local/ms-playwright so all users can access them.
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/local/ms-playwright
 RUN npm install -g @playwright/cli@latest && \
-    npx playwright install --with-deps chromium
+    npx playwright install --with-deps chromium && \
+    chmod -R 755 /usr/local/ms-playwright
 
 # Install Claude Code using the official native installer
 RUN curl -fsSL https://claude.ai/install.sh | bash && \
@@ -43,6 +46,7 @@ RUN cat > /entrypoint.sh << 'EOF'
 # ~/.claude is mounted at /host-claude-dir (not under $HOME) so Docker
 # never auto-creates $HOME as root. We create it ourselves as the runtime
 # user, then symlink .claude into place and copy .claude.json locally.
+export PLAYWRIGHT_BROWSERS_PATH=/usr/local/ms-playwright
 mkdir -p "$HOME/.local/bin"
 ln -sf /host-claude-dir "$HOME/.claude"
 if [ -f /tmp/host-claude.json ]; then
@@ -181,7 +185,7 @@ exec docker run \
     --env SANDBOX_DEV_PORT="${DEV_START}" \
     --publish "127.0.0.1:${PORT_SLACK}:3118" \
     --publish "127.0.0.1:${PORT_LOGIN}:10000" \
-    --publish "127.0.0.1:${DEV_START}-${DEV_END}:4321-4330" \
+    --publish "127.0.0.1:${DEV_START}-${DEV_END}:${DEV_START}-${DEV_END}" \
     --volume "$(pwd):/workspace" \
     --volume "$(pwd)/.claude:/host-claude-dir" \
     --volume "$HOME/.claude/plugins:/host-claude-dir/plugins:ro" \
