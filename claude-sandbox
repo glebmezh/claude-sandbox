@@ -25,13 +25,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
 # Install Playwright and Chromium with all system deps.
-# - Use the full 'playwright' package (not @playwright/cli which hardcodes /opt/google/chrome)
+# - Install playwright (full library) to /opt/playwright so require('playwright')
+#   works from any directory via NODE_PATH (npm install -g only installs the CLI wrapper)
 # - Store browsers in /usr/local/ms-playwright, world-writable so the runtime
 #   user can install additional browsers if needed.
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr/local/ms-playwright
-RUN npm install -g playwright && \
+RUN mkdir -p /opt/playwright && \
+    cd /opt/playwright && \
+    npm init -y && \
+    npm install playwright && \
     npx playwright install --with-deps chromium && \
-    chmod -R 777 /usr/local/ms-playwright
+    chmod -R 777 /usr/local/ms-playwright && \
+    ln -sf /opt/playwright/node_modules/.bin/playwright /usr/local/bin/playwright
+ENV NODE_PATH=/opt/playwright/node_modules
 
 # Install Claude Code using the official native installer
 RUN curl -fsSL https://claude.ai/install.sh | bash && \
@@ -49,6 +55,7 @@ RUN cat > /entrypoint.sh << 'EOF'
 # never auto-creates $HOME as root. We create it ourselves as the runtime
 # user, then symlink .claude into place and copy .claude.json locally.
 export PLAYWRIGHT_BROWSERS_PATH=/usr/local/ms-playwright
+export NODE_PATH=/opt/playwright/node_modules
 mkdir -p "$HOME/.local/bin"
 ln -sf /host-claude-dir "$HOME/.claude"
 if [ -f /tmp/host-claude.json ]; then
