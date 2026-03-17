@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # claude-sandbox — run Claude Code in a Docker container sandboxed to CWD
-# Usage: claude-sandbox [--rebuild] [claude args...]
+# Usage: claude-sandbox [--rebuild] [--shell] [claude args...]
+#        Pass --worktree (or any other claude flag) directly as a claude arg.
 set -euo pipefail
 
 IMAGE_NAME="claude-code-sandbox"
@@ -140,6 +141,52 @@ trap 'rm -rf "$SANDBOX_DIR"' EXIT
 
 # Create project .claude dir if it doesn't exist
 mkdir -p "$(pwd)/.claude"
+
+# Inject sandbox context into .claude/CLAUDE.md (gitignored, definitely
+# loaded by Claude at startup). Replaces the sandbox block each run so
+# port numbers stay current.
+CLAUDE_MD="$(pwd)/.claude/CLAUDE.md"
+SANDBOX_BLOCK_START="<!-- claude-sandbox:start -->"
+SANDBOX_BLOCK_END="<!-- claude-sandbox:end -->"
+
+# Strip any previous sandbox block, then append a fresh one.
+if [ -f "$CLAUDE_MD" ]; then
+    python3 -c "
+import re
+txt = open('$CLAUDE_MD').read()
+txt = re.sub(r'<!-- claude-sandbox:start -->.*?<!-- claude-sandbox:end -->\n?', '', txt, flags=re.DOTALL)
+open('$CLAUDE_MD', 'w').write(txt.rstrip() + '\n' if txt.strip() else '')
+"
+fi
+
+cat >> "$CLAUDE_MD" << SANDBOXEOF
+$SANDBOX_BLOCK_START
+## SANDBOX ENVIRONMENT — READ THIS FIRST
+
+You are running inside a Docker container launched by **claude-sandbox**. The rules below are hard constraints, not suggestions.
+
+### Dev servers — REQUIRED behaviour
+
+- **Always** pass \`--host 0.0.0.0\` (or equivalent) when starting any dev server. Binding to \`localhost\`/\`127.0.0.1\` makes the server unreachable from the Mac host.
+- **Always** use port \`\$SANDBOX_DEV_PORT\` (currently **${DEV_START}**) as the primary dev server port. Never hardcode 3000, 5173, 4321, etc.
+- Correct example: \`astro dev --port \$SANDBOX_DEV_PORT --host 0.0.0.0\`
+
+### Port forwarding (this session)
+
+| Purpose | Mac host | Container |
+|---------|----------|-----------|
+| Dev server (primary) | \`localhost:${DEV_START}\` | \`${DEV_START}\` → \`\$SANDBOX_DEV_PORT\` |
+| Dev server range | \`localhost:${DEV_START}–${DEV_END}\` | \`${DEV_START}–${DEV_END}\` |
+| Slack OAuth | \`localhost:${PORT_SLACK}\` | \`3118\` |
+| Login callback | \`localhost:${PORT_LOGIN}\` | \`10000\` |
+
+### Other constraints
+
+- Workspace \`$(pwd)\` is mounted at \`/workspace\`. Nothing outside \`/workspace\` is accessible.
+- \`~/.claude\` is bind-mounted from \`$(pwd)/.claude\` — changes persist.
+- Only \`http\`-type MCP servers are available; \`stdio\` MCP servers from the host are not forwarded.
+$SANDBOX_BLOCK_END
+SANDBOXEOF
 
 # Share conversation history with local Claude: compute the same project key
 # Claude uses (absolute path with / → -) and ensure the dir exists in both places.
