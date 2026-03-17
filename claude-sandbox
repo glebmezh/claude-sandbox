@@ -195,12 +195,18 @@ GLOBAL_HISTORY_DIR="$HOME/.claude/projects/$PROJECT_KEY"
 LOCAL_HISTORY_DIR="$(pwd)/.claude/projects/$PROJECT_KEY"
 mkdir -p "$GLOBAL_HISTORY_DIR" "$LOCAL_HISTORY_DIR"
 
-# Build merged credentials: claudeAiOauth (Keychain) + mcpOAuth (project file if any)
+# Build merged credentials: claudeAiOauth (Keychain) + mcpOAuth (project file if any).
+# Write directly into $(pwd)/.claude/ so it lands inside the existing bind mount —
+# mounting a file *inside* a bind-mounted dir causes a nested-mount error on VirtioFS.
+# Cleaned up by the EXIT trap via SANDBOX_DIR is insufficient here, so we track it separately.
 KEYCHAIN_FILE="$SANDBOX_DIR/keychain.json"
-CREDS_FILE="$SANDBOX_DIR/credentials.json"
+CREDS_FILE="$(pwd)/.claude/.credentials.json"
+CREDS_FILE_EXISTED=$([ -f "$CREDS_FILE" ] && echo true || echo false)
+trap 'rm -rf "$SANDBOX_DIR"; $CREDS_FILE_EXISTED || rm -f "$CREDS_FILE"' EXIT
+
 security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null > "$KEYCHAIN_FILE" || echo '{}' > "$KEYCHAIN_FILE"
 
-python3 - "$KEYCHAIN_FILE" "$(pwd)/.claude/.credentials.json" "$CREDS_FILE" <<'PYEOF'
+python3 - "$KEYCHAIN_FILE" "$CREDS_FILE" <<'PYEOF'
 import json, sys
 keychain = json.load(open(sys.argv[1]))
 try:
@@ -208,7 +214,7 @@ try:
 except Exception:
     existing = {}
 merged = {**existing, **{k: v for k, v in keychain.items() if k == 'claudeAiOauth'}}
-json.dump(merged, open(sys.argv[3], 'w'))
+json.dump(merged, open(sys.argv[2], 'w'))
 PYEOF
 
 # Synthesize ~/.claude.json with HTTP mcpServers only (stdio servers reference
@@ -247,7 +253,6 @@ exec docker run \
     --volume "$HOME/.claude/plugins:/host-claude-dir/plugins:ro" \
     --volume "$HOME/.claude/skills:/host-claude-dir/skills:ro" \
     --volume "$GLOBAL_HISTORY_DIR:/host-claude-dir/projects/$PROJECT_KEY" \
-    --volume "$CREDS_FILE:/host-claude-dir/.credentials.json" \
     --volume "$CLAUDE_JSON_FILE:/tmp/host-claude.json:ro" \
     --workdir /workspace \
     ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
