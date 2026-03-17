@@ -78,17 +78,31 @@ DOCKERFILE
 REBUILD=false
 SHELL_MODE=false
 PASS_ARGS=()
+EXTRA_ENV=()
 
-for arg in "$@"; do
-    case "$arg" in
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --rebuild|-r)
             REBUILD=true
+            shift
             ;;
         --shell|-s)
             SHELL_MODE=true
+            shift
+            ;;
+        --env|-e)
+            # --env FOO        → pass host value of FOO into container
+            # --env FOO=bar    → set FOO=bar in container
+            EXTRA_ENV+=("$2")
+            shift 2
+            ;;
+        --env=*|-e=*)
+            EXTRA_ENV+=("${1#*=}")
+            shift
             ;;
         *)
-            PASS_ARGS+=("$arg")
+            PASS_ARGS+=("$1")
+            shift
             ;;
     esac
 done
@@ -256,6 +270,7 @@ exec docker run \
     --volume "$CLAUDE_JSON_FILE:/tmp/host-claude.json:ro" \
     --workdir /workspace \
     ${ANTHROPIC_BASE_URL:+--env ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL}"} \
+    "${EXTRA_ENV[@]/#/--env=}" \
     $($SHELL_MODE && echo "--entrypoint bash") \
     "${FULL_IMAGE}" \
     $($SHELL_MODE || echo "--dangerously-skip-permissions") \
