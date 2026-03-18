@@ -182,15 +182,15 @@ You are running inside a Docker container launched by **claude-sandbox**. The ru
 ### Dev servers — REQUIRED behaviour
 
 - **Always** pass \`--host 0.0.0.0\` (or equivalent) when starting any dev server. Binding to \`localhost\`/\`127.0.0.1\` makes the server unreachable from the Mac host.
-- **Always** use port \`\$SANDBOX_DEV_PORT\` (currently **${DEV_START}**) as the primary dev server port. Never hardcode 3000, 5173, 4321, etc.
+- **Always** use port \`\$SANDBOX_DEV_PORT\` (**4321**) as the primary dev server port. The host accesses it at \`localhost:${DEV_START}\`.
 - Correct example: \`astro dev --port \$SANDBOX_DEV_PORT --host 0.0.0.0\`
 
 ### Port forwarding (this session)
 
 | Purpose | Mac host | Container |
 |---------|----------|-----------|
-| Dev server (primary) | \`localhost:${DEV_START}\` | \`${DEV_START}\` → \`\$SANDBOX_DEV_PORT\` |
-| Dev server range | \`localhost:${DEV_START}–${DEV_END}\` | \`${DEV_START}–${DEV_END}\` |
+| Dev server (primary) | \`localhost:${DEV_START}\` | \`4321\` (= \`\$SANDBOX_DEV_PORT\`) |
+| Dev server range | \`localhost:${DEV_START}–${DEV_END}\` | \`4321–4330\` |
 | Slack OAuth | \`localhost:${PORT_SLACK}\` | \`3118\` |
 | Login callback | \`localhost:${PORT_LOGIN}\` | \`10000\` |
 
@@ -258,10 +258,10 @@ exec docker run \
     --user "$(id -u):$(id -g)" \
     --env HOME="$HOME" \
     --env HOST=0.0.0.0 \
-    --env SANDBOX_DEV_PORT="${DEV_START}" \
+    --env SANDBOX_DEV_PORT=4321 \
     --publish "127.0.0.1:${PORT_SLACK}:3118" \
     --publish "127.0.0.1:${PORT_LOGIN}:10000" \
-    --publish "127.0.0.1:${DEV_START}-${DEV_END}:${DEV_START}-${DEV_END}" \
+    --publish "127.0.0.1:${DEV_START}-${DEV_END}:4321-4330" \
     --volume "$(pwd):/workspace" \
     --volume "$(pwd)/.claude:/host-claude-dir" \
     --volume "$HOME/.claude/plugins:/host-claude-dir/plugins:ro" \
