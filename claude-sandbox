@@ -37,7 +37,8 @@ RUN mkdir -p /opt/playwright && \
     npm install playwright && \
     npx playwright install --with-deps chromium && \
     chmod -R 777 /usr/local/ms-playwright && \
-    ln -sf /opt/playwright/node_modules/.bin/playwright /usr/local/bin/playwright
+    ln -sf /opt/playwright/node_modules/.bin/playwright /usr/local/bin/playwright && \
+    npm install -g @playwright/cli
 ENV NODE_PATH=/opt/playwright/node_modules
 
 # Install Claude Code using the official native installer
