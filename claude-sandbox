@@ -174,42 +174,45 @@ open('$CLAUDE_MD', 'w').write(txt.rstrip() + '\n' if txt.strip() else '')
 "
 fi
 
-cat >> "$CLAUDE_MD" << SANDBOXEOF
-$SANDBOX_BLOCK_START
+cat >> "$CLAUDE_MD" << 'SANDBOXEOF'
+<!-- claude-sandbox:start -->
 ## SANDBOX ENVIRONMENT — READ THIS FIRST
 
-You are running inside a Docker container launched by **claude-sandbox**. The rules below are hard constraints, not suggestions.
+You are running inside a Docker container. These are hard constraints.
 
-### Dev servers — REQUIRED behaviour
+### Port mapping — ALWAYS use env vars, never hardcode
 
-- **Always** pass \`--host 0.0.0.0\` (or equivalent). Binding to \`localhost\`/\`127.0.0.1\` makes the server unreachable from the Mac host.
-- **Always** start on container port \`\$SANDBOX_DEV_PORT\` (**4321**). Kill existing node/astro processes first — do not let Vite auto-bump to the next port.
-- Kill command: \`kill -9 \$(lsof -ti :4321,:4322,:4323,:4324,:4325,:4326,:4327,:4328,:4329,:4330 2>/dev/null) 2>/dev/null || true\`
-- Correct start: \`astro dev --port \$SANDBOX_DEV_PORT --host 0.0.0.0\`
+Run this to get the current host port before reporting any URL to the user:
+```
+echo $SANDBOX_HOST_PORT   # Mac-side port that maps to container port 4321
+```
 
-**URL translation — CRITICAL**: Astro/Vite will print \`http://localhost:4321\` in its output. That is the **container-internal** URL. **Never tell the user that URL.** The user's Mac URL is \`http://localhost:\$SANDBOX_HOST_PORT\` = **http://localhost:${DEV_START}**. Always report this one.
+- Container port `$SANDBOX_DEV_PORT` (4321) → Mac `http://localhost:$SANDBOX_HOST_PORT`
+- **CRITICAL**: Astro/Vite prints `http://localhost:4321` — that is the container-internal URL. **Never give this to the user.** Always run `echo $SANDBOX_HOST_PORT` and give them `localhost:$SANDBOX_HOST_PORT`.
+
+### Starting a dev server
+
+```bash
+# 1. Kill any lingering processes holding the forwarded ports
+kill -9 $(lsof -ti :4321,:4322,:4323,:4324,:4325,:4326,:4327,:4328,:4329,:4330 2>/dev/null) 2>/dev/null || true
+# 2. Start bound to 0.0.0.0 on the fixed container port
+astro dev --port $SANDBOX_DEV_PORT --host 0.0.0.0
+# 3. Tell the user: http://localhost:$SANDBOX_HOST_PORT
+```
+
+Never let Vite/Astro auto-bump to a different port — kill first, then start.
 
 ### Playwright / Chromium
 
-Chromium is **pre-installed** in the container at \`\$PLAYWRIGHT_BROWSERS_PATH\` (\`/usr/local/ms-playwright\`).
-- **Never** run \`npx playwright install\` or override \`PLAYWRIGHT_BROWSERS_PATH\`.
-- Use \`require('playwright')\` directly — it will find the pre-installed browser automatically.
-
-### Port forwarding (this session)
-
-| Purpose | Mac host | Container |
-|---------|----------|-----------|
-| Dev server (primary) | \`localhost:${DEV_START}\` | \`4321\` (= \`\$SANDBOX_DEV_PORT\`) |
-| Dev server range | \`localhost:${DEV_START}–${DEV_END}\` | \`4321–4330\` |
-| Slack OAuth | \`localhost:${PORT_SLACK}\` | \`3118\` |
-| Login callback | \`localhost:${PORT_LOGIN}\` | \`10000\` |
+Chromium is **pre-installed** at `$PLAYWRIGHT_BROWSERS_PATH` (`/usr/local/ms-playwright`).
+- **Never** run `npx playwright install` or set `PLAYWRIGHT_BROWSERS_PATH` to anything else.
+- `require('playwright')` works directly — browsers are already there.
 
 ### Other constraints
 
-- Workspace \`$(pwd)\` is mounted at \`/workspace\`. Nothing outside \`/workspace\` is accessible.
-- \`~/.claude\` is bind-mounted from \`$(pwd)/.claude\` — changes persist.
-- Only \`http\`-type MCP servers are available; \`stdio\` MCP servers from the host are not forwarded.
-$SANDBOX_BLOCK_END
+- Workspace is at `/workspace`. Nothing outside it is accessible.
+- Only `http`-type MCP servers are available; `stdio` MCP servers are not forwarded.
+<!-- claude-sandbox:end -->
 SANDBOXEOF
 
 # Share conversation history with local Claude: compute the same project key
