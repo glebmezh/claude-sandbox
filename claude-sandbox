@@ -260,6 +260,19 @@ out['mcpServers'] = http_servers
 json.dump(out, open(sys.argv[2], 'w'))
 PYEOF
 
+# Build skill volume mounts, resolving symlinks so Claude Code sees real dirs
+SKILL_MOUNTS=()
+for skill in "$HOME/.claude/skills"/*/; do
+    skill="${skill%/}"
+    name=$(basename "$skill")
+    if [ -L "$skill" ]; then
+        resolved=$(readlink -f "$skill")
+        SKILL_MOUNTS+=(--volume "${resolved}:/host-claude-dir/skills/${name}:ro")
+    else
+        SKILL_MOUNTS+=(--volume "${skill}:/host-claude-dir/skills/${name}:ro")
+    fi
+done
+
 # ── launch ───────────────────────────────────────────────────────────────────
 
 echo "[claude-sandbox] Dev server → http://localhost:${DEV_START} on your Mac"
@@ -279,7 +292,7 @@ exec docker run \
     --volume "$(pwd):/workspace" \
     --volume "$(pwd)/.claude:/host-claude-dir" \
     --volume "$HOME/.claude/plugins:/host-claude-dir/plugins:ro" \
-    --volume "$HOME/.claude/skills:/host-claude-dir/skills:ro" \
+    "${SKILL_MOUNTS[@]}" \
     --volume "$GLOBAL_HISTORY_DIR:/host-claude-dir/projects/$PROJECT_KEY" \
     --volume "$CLAUDE_JSON_FILE:/tmp/host-claude.json:ro" \
     --workdir /workspace \
